@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作计时</title>
+<style>
+  :root{
+    --bg:#f3f4f6; --card:#ffffff; --text:#1c1f26; --text2:#52514e; --muted:#8a909c;
+    --line:#e7e9ee; --accent:#3b7df6; --start:#22a06b; --start-d:#1c8a5b;
+    --stop:#e5484d; --stop-d:#cf3a3f; --chip:#eef1f6;
+    --data:#2a78d6; --data-soft:rgba(42,120,214,.13);
+    --shadow:0 1px 3px rgba(20,24,40,.07),0 10px 30px rgba(20,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#111318; --card:#1d2028; --text:#e8eaf0; --text2:#c3c2b7; --muted:#8b93a3;
+      --line:#2b2f3a; --accent:#5a92ff; --start:#2bb47c; --start-d:#249d6c;
+      --stop:#f0595e; --stop-d:#d8494e; --chip:#262a34;
+      --data:#3987e5; --data-soft:rgba(57,135,229,.16);
+      --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.32);
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:22px 20px 56px;
+  }
+  .top{max-width:1120px; margin:0 auto 16px; display:flex; align-items:baseline; gap:12px}
+  h1{font-size:21px; font-weight:700; margin:0; letter-spacing:.5px}
+  .top .sub{color:var(--muted); font-size:13px}
+  .app{max-width:1120px; margin:0 auto; display:grid; grid-template-columns:340px 1fr; gap:18px; align-items:start}
+  @media (max-width:840px){ .app{grid-template-columns:1fr} .left{position:static !important} }
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:20px; margin-bottom:18px}
+  .card:last-child{margin-bottom:0}
+  .card-h{display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; margin-bottom:16px}
+  .card-h .muted{font-weight:400; font-size:13px}
+  .spacer{flex:1}
+  .muted{color:var(--muted)}
+
+  /* 左侧计时面板 */
+  .left{position:sticky; top:22px}
+  .timer-card{text-align:center; padding:26px 20px}
+  #taskInput{width:100%; font-size:16px; padding:13px 15px; border-radius:12px; border:1px solid var(--line); background:var(--bg); color:var(--text); outline:none; margin-bottom:14px}
+  #taskInput:focus{border-color:var(--accent)}
+  .run-task{font-size:17px; font-weight:600; margin-bottom:6px; word-break:break-word}
+  .clock{font-size:52px; font-weight:700; letter-spacing:2px; font-variant-numeric:tabular-nums; margin:8px 0 20px; line-height:1}
+  .btn{border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; padding:13px 28px; color:#fff; transition:transform .05s, background .15s; -webkit-user-select:none; user-select:none}
+  .btn:active{transform:scale(.97)}
+  .btn.start{background:var(--start)} .btn.start:hover{background:var(--start-d)}
+  .btn.stop{background:var(--stop)}  .btn.stop:hover{background:var(--stop-d)}
+  .btn.ghost{background:transparent; color:var(--text); border:1px solid var(--line); font-size:14px; padding:9px 15px}
+  .btn.ghost:hover{background:var(--chip)}
+  .btn.danger-ghost{background:transparent; color:var(--stop); border:1px solid var(--line); font-size:14px; padding:9px 15px}
+  .btn.danger-ghost:hover{background:rgba(229,72,77,.1)}
+  .linklike{background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; padding:6px 2px}
+  .linklike:hover{text-decoration:underline}
+  .today-foot{margin-top:18px; padding-top:16px; border-top:1px solid var(--line); color:var(--text2); font-size:14px}
+  .today-foot b{color:var(--text); font-weight:700}
+
+  /* 时间段切换 */
+  .segmented{display:inline-flex; background:var(--chip); border-radius:11px; padding:3px; gap:2px}
+  .seg{border:none; background:transparent; color:var(--text2); font-size:13px; font-weight:600; padding:7px 13px; border-radius:8px; cursor:pointer}
+  .seg.on{background:var(--card); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+  /* KPI */
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  @media (max-width:520px){ .kpis{grid-template-columns:repeat(2,1fr)} }
+  .kpi{background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:13px 14px}
+  .kpi-v{font-size:22px; font-weight:700; line-height:1.1}
+  .kpi-l{color:var(--muted); font-size:12px; margin-top:5px}
+
+  /* 横向条形图:各任务用时 */
+  .hbar{display:grid; grid-template-columns:minmax(64px,30%) 1fr auto; align-items:center; gap:11px; margin:9px 0}
+  .hbar-label{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px}
+  .hbar-track{height:16px; background:var(--data-soft); border-radius:5px; overflow:hidden}
+  .hbar-fill{height:16px; min-width:3px; background:var(--data); border-radius:0 5px 5px 0}
+  .hbar-val{font-size:13px; color:var(--text2); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .chart-empty{color:var(--muted); text-align:center; padding:22px 0}
+
+  /* 柱状图:每日用时 */
+  .cols-plot{display:flex; align-items:flex-end; gap:3px; height:120px; border-bottom:1px solid var(--line)}
+  .col-wrap{flex:1; display:flex; align-items:flex-end; justify-content:center; height:100%}
+  .col-bar{width:68%; max-width:22px; min-height:2px; background:var(--data); border-radius:4px 4px 0 0}
+  .cols-x{display:flex; gap:3px; margin-top:6px}
+  .col-x{flex:1; text-align:center; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .col-x.on{color:var(--text); font-weight:700}
+
+  /* 明细表 */
+  table{width:100%; border-collapse:collapse; font-size:14px}
+  th,td{text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.5px}
+  td.num{white-space:nowrap; font-variant-numeric:tabular-nums; font-weight:600; width:80px}
+  td ul{margin:0; padding-left:18px} td li{margin:2px 0}
+  .empty{color:var(--muted); text-align:center; padding:22px 0}
+  details{margin-top:14px}
+  summary{cursor:pointer; color:var(--muted); font-size:14px; padding:6px 0; -webkit-user-select:none; user-select:none}
+  .sess{border:1px solid var(--line); border-radius:11px; padding:11px 13px; margin:8px 0}
+  .s-main{display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap}
+  .s-task{font-weight:600}
+  .s-meta{color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums}
+  .s-deli{margin:6px 0 8px; font-size:14px; word-break:break-word}
+  .s-actions{display:flex; gap:8px}
+  .s-actions button{background:transparent; border:1px solid var(--line); color:var(--muted); font-size:12px; padding:5px 10px; border-radius:8px; cursor:pointer}
+  .s-actions button:hover{color:var(--text); background:var(--chip)}
+  .tools{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+
+  /* 弹窗 */
+  .overlay{position:fixed; inset:0; background:rgba(10,12,18,.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:10}
+  .modal{background:var(--card); border-radius:16px; padding:22px; width:100%; max-width:440px; box-shadow:var(--shadow); max-height:90vh; overflow:auto}
+  .modal h3{margin:0 0 4px; font-size:18px}
+  .modal-sub{color:var(--muted); font-size:14px; margin-bottom:14px}
+  #deliverableInput{width:100%; min-height:96px; font-size:15px; padding:12px; border-radius:11px; border:1px solid var(--line); background:var(--bg); color:var(--text); resize:vertical; outline:none; font-family:inherit}
+  #deliverableInput:focus{border-color:var(--accent)}
+  .modal-btns{display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:16px}
+  .fld{display:block; margin-bottom:13px; font-size:13px; color:var(--muted)}
+  .fld > input, .fld > textarea{display:block; width:100%; margin-top:5px; font-size:15px; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); outline:none; font-family:inherit}
+  .fld > input:focus, .fld > textarea:focus{border-color:var(--accent)}
+  .fld > textarea{min-height:72px; resize:vertical}
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>⏱ 工作计时</h1>
+  <span class="sub">左边计时,右边看统计与图表</span>
+</div>
+
+<div class="app">
+  <!-- 左:计时 -->
+  <div class="left">
+    <div class="card timer-card">
+      <div id="idleView">
+        <input id="taskInput" list="taskList" placeholder="这次做什么?例如:写周报 / 改 bug / A 项目" autocomplete="off">
+        <datalist id="taskList"></datalist>
+        <div><button id="startBtn" class="btn start">▶ 开始</button></div>
+      </div>
+      <div id="runView" hidden>
+        <div class="run-task" id="runTask"></div>
+        <div class="clock" id="clock">00:00:00</div>
+        <button id="stopBtn" class="btn stop">■ 结束</button>
+        <div><button id="editActiveBtn" class="linklike">调整开始时间</button></div>
+      </div>
+      <div class="today-foot">今日合计 <b id="todayFoot">0m</b></div>
+    </div>
+  </div>
+
+  <!-- 右:统计 + 图表 -->
+  <div class="right">
+    <div class="card">
+      <div class="card-h">
+        <div class="segmented" id="segmented">
+          <button class="seg on" data-period="today">今天</button>
+          <button class="seg" data-period="week">近 7 天</button>
+          <button class="seg" data-period="month">本月</button>
+          <button class="seg" data-period="all">全部</button>
+        </div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-v" id="kpiTotal">0m</div><div class="kpi-l">合计时长</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiTasks">0</div><div class="kpi-l">任务数</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiCount">0</div><div class="kpi-l">记录数</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiAvg">—</div><div class="kpi-l">平均每次</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">各任务用时 <span class="muted" id="taskChartScope"></span></div>
+      <div id="taskChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">每日用时 <span class="muted">· 近 14 天</span><span class="spacer"></span><span class="muted" id="dailyPeak"></span></div>
+      <div id="dailyChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">明细与产物 <span class="muted" id="tableScope"></span><span class="spacer"></span><button class="btn ghost" id="addBtn">＋ 补录</button></div>
+      <table id="summaryTable">
+        <thead><tr><th>任务</th><th>时长</th><th>产物</th></tr></thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg" hidden>这个时间段还没有记录。</div>
+      <details id="detailWrap">
+        <summary>查看逐条明细 / 编辑</summary>
+        <div id="detailList"></div>
+      </details>
+    </div>
+
+    <div class="card tools">
+      <button class="btn ghost" id="exportCsv">导出 CSV</button>
+      <button class="btn ghost" id="exportJson">导出 JSON(备份)</button>
+      <label class="btn ghost" style="cursor:pointer">导入 JSON<input type="file" id="importJson" accept="application/json,.json" hidden></label>
+      <span class="spacer"></span>
+      <button class="btn danger-ghost" id="clearAll">清空全部</button>
+    </div>
+  </div>
+</div>
+
+<!-- 结束时填产物 -->
+<div class="overlay" id="overlay" hidden>
+  <div class="modal">
+    <h3>这次产出了什么?</h3>
+    <div class="modal-sub" id="modalSub"></div>
+    <textarea id="deliverableInput" placeholder="例如:发出了周报邮件 / 合并 PR #42 / 完成登录页 UI（可留空）"></textarea>
+    <div class="modal-btns">
+      <button class="btn ghost" id="skipSave">跳过</button>
+      <button class="btn start" id="confirmSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑 / 补录:可自行调整开始、结束时间 -->
+<div class="overlay" id="editOverlay" hidden>
+  <div class="modal">
+    <h3 id="editTitle">编辑记录</h3>
+    <label class="fld">任务名<input type="text" id="editTask" list="taskList" autocomplete="off"></label>
+    <label class="fld">开始时间<input type="datetime-local" id="editStart"></label>
+    <label class="fld">结束时间<input type="datetime-local" id="editEnd">
+      <button type="button" class="linklike" id="editRunning">设为进行中(清空结束时间)</button>
+    </label>
+    <label class="fld">产物<textarea id="editDeli" placeholder="这次产出了什么(可留空)"></textarea></label>
+    <div class="modal-btns">
+      <button class="btn danger-ghost" id="editDelete">删除</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="editCancel">取消</button>
+      <button class="btn start" id="editSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const KEY = "work_timer_sessions_v1";
+  const $ = id => document.getElementById(id);
+
+  let sessions = load();
+  let pendingStop = null;   // 点“结束”那一刻的时间,避免把填产物的时间算进去
+  let editing = null;       // 正在编辑的记录 id;null 表示新建补录
+  let period = "today";     // today | week | month | all
+
+  // ---------- 存储 ----------
+  function load(){
+    try { const a = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(a) ? a : []; }
+    catch(e){ return []; }
+  }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify(sessions)); }
+    catch(e){ alert("保存失败:浏览器可能处于隐私模式或存储已满。请用「导出 JSON」备份。"); }
+  }
+  const active = () => sessions.find(s => !s.end);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+  // ---------- 格式化 ----------
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function dateKey(ts){ const d = new Date(ts); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function fmtHM(ts){ const d = new Date(ts); return pad(d.getHours())+":"+pad(d.getMinutes()); }
+  function fmtClock(sec){ sec = Math.floor(sec); return pad(Math.floor(sec/3600))+":"+pad(Math.floor(sec%3600/60))+":"+pad(sec%60); }
+  function fmtDur(sec){
+    sec = Math.round(sec);
+    if(sec <= 0) return "0m";
+    const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+    if(h>0) return h+"h"+pad(m)+"m";
+    if(m>0) return m+"m";
+    return s+"s";
+  }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  const today = () => dateKey(Date.now());
+  function startOfDay(ts){ const d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+
+  // 时间戳 <-> <input type="datetime-local">
+  function toLocalInput(ts){ const d = new Date(ts); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+  function parseLocalInput(v){ const m = String(v||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).getTime() : null; }
+
+  // ---------- 时间段 ----------
+  function periodRange(){
+    const now = Date.now(), sod = startOfDay(now);
+    if(period === "today") return { from: sod, to: now+1, label: "今天" };
+    if(period === "week")  return { from: sod - 6*86400000, to: now+1, label: "近 7 天" };
+    if(period === "month"){ const d = new Date(); return { from: new Date(d.getFullYear(), d.getMonth(), 1).getTime(), to: now+1, label: "本月" }; }
+    return { from: 0, to: now+1, label: "全部" };
+  }
+  const done = () => sessions.filter(s => s.end);
+  function inRange(from, to){ return done().filter(s => s.start >= from && s.start < to); }
+  const secOf = s => (s.end - s.start)/1000;
+
+  // ---------- 开始 / 结束 ----------
+  $("startBtn").onclick = () => {
+    const task = $("taskInput").value.trim();
+    if(!task){ $("taskInput").focus(); return; }
+    if(active()) return;
+    sessions.push({ id: uid(), task, start: Date.now(), end: null, deliverable: "" });
+    $("taskInput").value = "";
+    save(); render(); tick();
+  };
+  $("taskInput").addEventListener("keydown", e => { if(e.key === "Enter") $("startBtn").click(); });
+
+  $("stopBtn").onclick = () => {
+    const a = active();
+    if(!a) return;
+    pendingStop = { id: a.id, end: Date.now() };
+    $("modalSub").textContent = a.task + " · 用时 " + fmtDur((pendingStop.end - a.start)/1000);
+    $("deliverableInput").value = a.deliverable || "";
+    $("overlay").hidden = false;
+    $("deliverableInput").focus();
+  };
+  function finalize(deliverable){
+    if(!pendingStop) return;
+    const s = sessions.find(x => x.id === pendingStop.id);
+    if(s){ s.end = pendingStop.end; s.deliverable = deliverable; }
+    pendingStop = null; $("overlay").hidden = true;
+    save(); render(); tick();
+  }
+  $("confirmSave").onclick = () => finalize($("deliverableInput").value.trim());
+  $("skipSave").onclick   = () => finalize("");
+  $("deliverableInput").addEventListener("keydown", e => { if(e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("confirmSave").click(); });
+
+  // ---------- 时间段切换 ----------
+  document.querySelectorAll(".seg").forEach(b => b.onclick = () => { period = b.getAttribute("data-period"); render(); });
+
+  // ---------- 明细:编辑 / 删除 ----------
+  $("detailList").addEventListener("click", e => {
+    const edit = e.target.getAttribute("data-edit");
+    const del  = e.target.getAttribute("data-del");
+    if(edit) openEdit(edit);
+    if(del && confirm("删除这条记录?此操作不可撤销。")){ sessions = sessions.filter(x => x.id !== del); save(); render(); }
+  });
+
+  // ---------- 编辑 / 补录 弹窗(可自行调整开始、结束时间) ----------
+  function openEdit(id){
+    const s = id ? sessions.find(x => x.id === id) : null;
+    editing = s ? id : null;
+    $("editTitle").textContent = s ? "编辑记录" : "手动补录";
+    $("editDelete").hidden = !s;
+    if(s){
+      $("editTask").value  = s.task;
+      $("editStart").value = toLocalInput(s.start);
+      $("editEnd").value   = s.end ? toLocalInput(s.end) : "";
+      $("editDeli").value  = s.deliverable || "";
+    } else {
+      const now = Date.now();
+      $("editTask").value  = "";
+      $("editStart").value = toLocalInput(now - 3600000); // 默认 1 小时前开始
+      $("editEnd").value   = toLocalInput(now);
+      $("editDeli").value  = "";
+    }
+    $("editOverlay").hidden = false;
+    $("editTask").focus();
+  }
+  function closeEdit(){ editing = null; $("editOverlay").hidden = true; }
+
+  $("addBtn").onclick = () => openEdit(null);
+  $("editActiveBtn").onclick = () => { const a = active(); if(a) openEdit(a.id); };
+  $("editCancel").onclick = closeEdit;
+  $("editRunning").onclick = () => { $("editEnd").value = ""; };
+  $("editDelete").onclick = () => {
+    if(editing && confirm("删除这条记录?此操作不可撤销。")){ sessions = sessions.filter(x => x.id !== editing); closeEdit(); save(); render(); }
+  };
+  $("editSave").onclick = () => {
+    const task  = $("editTask").value.trim();
+    const start = parseLocalInput($("editStart").value);
+    const end   = parseLocalInput($("editEnd").value); // 留空 = 进行中
+    if(!task){ alert("请填任务名。"); $("editTask").focus(); return; }
+    if(start === null){ alert("请填开始时间。"); return; }
+    if(end !== null && end <= start){ alert("结束时间要晚于开始时间。"); return; }
+    if(end === null){
+      const other = sessions.find(x => !x.end && x.id !== editing);
+      if(other){ alert("已有一个进行中的计时:" + other.task + "。请先结束它,或给这条填上结束时间。"); return; }
+    }
+    if(editing){
+      const s = sessions.find(x => x.id === editing);
+      if(s){ s.task = task; s.start = start; s.end = end; s.deliverable = $("editDeli").value.trim(); }
+    } else {
+      sessions.push({ id: uid(), task, start, end, deliverable: $("editDeli").value.trim() });
+    }
+    closeEdit();
+    if(start < periodRange().from) period = "all"; // 若记录不在当前时段,切到“全部”以便看到
+    save(); render(); tick();
+  };
+
+  // ---------- 导入 / 导出 / 清空 ----------
+  function download(name, content, type){
+    const blob = new Blob([content], { type: type + ";charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  $("exportCsv").onclick = () => {
+    const rows = [["日期","任务","开始","结束","时长(分钟)","时长","产物"]];
+    done().sort((a,b) => a.start-b.start).forEach(s => {
+      rows.push([ dateKey(s.start), s.task, new Date(s.start).toLocaleString(), new Date(s.end).toLocaleString(),
+                  (secOf(s)/60).toFixed(1), fmtDur(secOf(s)), s.deliverable || "" ]);
+    });
+    const csv = rows.map(r => r.map(c => { const t = String(c); return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; }).join(",")).join("\r\n");
+    download("工作计时_"+today()+".csv", "﻿"+csv, "text/csv");
+  };
+  $("exportJson").onclick = () => download("工作计时备份_"+today()+".json", JSON.stringify(sessions, null, 2), "application/json");
+  $("importJson").onchange = e => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if(!Array.isArray(data)) throw 0;
+        const have = new Set(sessions.map(s => s.id));
+        let added = 0;
+        data.forEach(s => { if(s && s.id && s.start && !have.has(s.id)){ sessions.push(s); have.add(s.id); added++; } });
+        save(); render();
+        alert("导入完成,新增 " + added + " 条记录。");
+      } catch(err){ alert("导入失败:不是有效的备份文件。"); }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  };
+  $("clearAll").onclick = () => {
+    if(confirm("确定清空全部记录?建议先「导出 JSON」备份。此操作不可撤销。")){ sessions = []; save(); render(); }
+  };
+
+  // ---------- 渲染 ----------
+  function renderDatalist(){
+    const names = [...new Set(sessions.map(s => s.task))].slice(-30).reverse();
+    $("taskList").innerHTML = names.map(n => '<option value="'+esc(n)+'">').join("");
+  }
+  function renderTimer(){
+    const a = active();
+    $("idleView").hidden = !!a;
+    $("runView").hidden  = !a;
+    if(a) $("runTask").textContent = a.task;
+    const sod = startOfDay(Date.now());
+    $("todayFoot").textContent = fmtDur(sessions.filter(s => s.end && s.start >= sod).reduce((n,s) => n+secOf(s), 0));
+  }
+  function renderKPIs(){
+    const {from,to} = periodRange();
+    const sess = inRange(from,to);
+    const total = sess.reduce((n,s) => n+secOf(s), 0);
+    $("kpiTotal").textContent = fmtDur(total);
+    $("kpiTasks").textContent = new Set(sess.map(s => s.task)).size;
+    $("kpiCount").textContent = sess.length;
+    $("kpiAvg").textContent   = sess.length ? fmtDur(total/sess.length) : "—";
+  }
+  function renderTaskChart(){
+    const {from,to,label} = periodRange();
+    $("taskChartScope").textContent = "· " + label;
+    const map = {};
+    inRange(from,to).forEach(s => { map[s.task] = (map[s.task]||0) + secOf(s); });
+    let rows = Object.entries(map).map(([task,sec]) => ({task,sec})).sort((a,b) => b.sec-a.sec);
+    if(rows.length > 8){ const rest = rows.slice(7).reduce((n,r) => n+r.sec, 0); rows = rows.slice(0,7); rows.push({task:"其他", sec:rest}); }
+    const max = Math.max(1, ...rows.map(r => r.sec));
+    $("taskChart").innerHTML = rows.length ? rows.map(r =>
+      "<div class='hbar' title='"+esc(r.task)+" · "+fmtDur(r.sec)+"'>"+
+        "<div class='hbar-label'>"+esc(r.task)+"</div>"+
+        "<div class='hbar-track'><div class='hbar-fill' style='width:"+Math.max(2, r.sec/max*100)+"%'></div></div>"+
+        "<div class='hbar-val'>"+fmtDur(r.sec)+"</div></div>"
+    ).join("") : "<div class='chart-empty'>这个时间段还没有记录</div>";
+  }
+  function renderDailyChart(){
+    const N = 14, H = 120, today0 = startOfDay(Date.now());
+    const arr = [];
+    for(let i=N-1; i>=0; i--){
+      const from = today0 - i*86400000, to = from + 86400000;
+      arr.push({ from, sec: done().filter(s => s.start >= from && s.start < to).reduce((n,s) => n+secOf(s), 0) });
+    }
+    const max = Math.max(1, ...arr.map(a => a.sec));
+    const peak = Math.max(...arr.map(a => a.sec));
+    $("dailyPeak").textContent = peak > 0 ? "峰值 " + fmtDur(peak) : "";
+    const plot = arr.map(a => {
+      const d = new Date(a.from), lab = (d.getMonth()+1)+"/"+d.getDate();
+      return "<div class='col-wrap' title='"+lab+" · "+(a.sec ? fmtDur(a.sec) : "无")+"'><div class='col-bar' style='height:"+Math.round(a.sec/max*H)+"px'></div></div>";
+    }).join("");
+    const xs = arr.map(a => { const d = new Date(a.from); return "<div class='col-x"+(a.from===today0?" on":"")+"'>"+d.getDate()+"</div>"; }).join("");
+    $("dailyChart").innerHTML = "<div class='cols-plot'>"+plot+"</div><div class='cols-x'>"+xs+"</div>";
+  }
+  function renderTable(){
+    const {from,to,label} = periodRange();
+    $("tableScope").textContent = "· " + label;
+    const sess = inRange(from,to);
+    const groups = {};
+    sess.forEach(s => {
+      if(!groups[s.task]) groups[s.task] = { task:s.task, sec:0, deli:[] };
+      groups[s.task].sec += secOf(s);
+      if(s.deliverable) groups[s.task].deli.push(s.deliverable);
+    });
+    const rows = Object.values(groups).sort((a,b) => b.sec-a.sec);
+    $("emptyMsg").hidden = sess.length > 0;
+    $("summaryTable").style.display = sess.length ? "" : "none";
+    $("summaryBody").innerHTML = rows.map(g =>
+      "<tr><td>"+esc(g.task)+"</td><td class='num'>"+fmtDur(g.sec)+"</td><td>"+
+      (g.deli.length ? "<ul>"+g.deli.map(d => "<li>"+esc(d)+"</li>").join("")+"</ul>" : "<span class='muted'>—</span>")+
+      "</td></tr>").join("");
+
+    const detail = [...sess].sort((a,b) => b.start-a.start);
+    $("detailList").innerHTML = detail.map(s =>
+      "<div class='sess'><div class='s-main'><span class='s-task'>"+esc(s.task)+
+      "</span><span class='s-meta'>"+dateKey(s.start)+" "+fmtHM(s.start)+"–"+fmtHM(s.end)+" · "+fmtDur(secOf(s))+"</span></div>"+
+      "<div class='s-deli'>"+(s.deliverable ? esc(s.deliverable) : "<span class='muted'>（无产物记录）</span>")+"</div>"+
+      "<div class='s-actions'><button data-edit='"+s.id+"'>编辑</button><button data-del='"+s.id+"'>删除</button></div></div>"
+    ).join("") || "<div class='muted' style='padding:8px 0'>无</div>";
+  }
+  function renderSegmented(){
+    document.querySelectorAll(".seg").forEach(b => b.classList.toggle("on", b.getAttribute("data-period") === period));
+  }
+  function render(){
+    renderSegmented(); renderTimer(); renderKPIs();
+    renderTaskChart(); renderDailyChart(); renderTable(); renderDatalist();
+  }
+
+  function tick(){
+    const a = active();
+    if(a){
+      const sec = (Date.now() - a.start)/1000;
+      $("clock").textContent = fmtClock(sec);
+      document.title = "⏱ " + fmtClock(sec) + " · " + a.task;
+    } else {
+      document.title = "工作计时";
+    }
+  }
+
+  // ---------- 启动 ----------
+  render(); tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

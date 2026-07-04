@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.zip
+
+# 个人 / 本机配置(不公开)
+.claude/
+.DS_Store
+
+# 导出的个人数据备份(不要提交)
+工作计时_*.csv
+工作计时备份_*.json
+*.local.json

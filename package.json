@@ -1,0 +1,31 @@
+{
+  "name": "work-timer",
+  "version": "1.0.0",
+  "description": "简单的工作计时与统计(桌面版)",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.example.worktimer",
+    "productName": "工作计时",
+    "files": [
+      "main.js",
+      "index.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.productivity"
+    }
+  }
+}
