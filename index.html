@@ -60,6 +60,17 @@
   .today-foot{margin-top:18px; padding-top:16px; border-top:1px solid var(--line); color:var(--text2); font-size:14px}
   .today-foot b{color:var(--text); font-weight:700}
 
+  /* 多个同时进行中的计时 */
+  .running-wrap{display:flex; flex-direction:column; gap:10px; margin-top:16px; text-align:left}
+  .run-item{border:1px solid var(--line); border-radius:12px; background:var(--bg); padding:12px 14px}
+  .run-item-top{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+  .r-head{display:flex; flex-direction:column; min-width:0}
+  .run-item .r-task{font-size:15px; font-weight:600; word-break:break-word; min-width:0}
+  .r-meta{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:3px}
+  .run-clock{font-size:27px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:1px; line-height:1; white-space:nowrap}
+  .run-item-actions{display:flex; align-items:center; gap:12px; margin-top:11px}
+  .run-item-actions .btn.stop{padding:9px 18px; font-size:14px}
+
   /* 时间段切换 */
   .segmented{display:inline-flex; background:var(--chip); border-radius:11px; padding:3px; gap:2px}
   .seg{border:none; background:transparent; color:var(--text2); font-size:13px; font-weight:600; padding:7px 13px; border-radius:8px; cursor:pointer}
@@ -132,17 +143,10 @@
   <!-- 左:计时 -->
   <div class="left">
     <div class="card timer-card">
-      <div id="idleView">
-        <input id="taskInput" list="taskList" placeholder="这次做什么?例如:写周报 / 改 bug / A 项目" autocomplete="off">
-        <datalist id="taskList"></datalist>
-        <div><button id="startBtn" class="btn start">▶ 开始</button></div>
-      </div>
-      <div id="runView" hidden>
-        <div class="run-task" id="runTask"></div>
-        <div class="clock" id="clock">00:00:00</div>
-        <button id="stopBtn" class="btn stop">■ 结束</button>
-        <div><button id="editActiveBtn" class="linklike">调整开始时间</button></div>
-      </div>
+      <input id="taskInput" list="taskList" placeholder="这次做什么?例如:写周报 / 改 bug / A 项目" autocomplete="off">
+      <datalist id="taskList"></datalist>
+      <div><button id="startBtn" class="btn start">▶ 开始</button></div>
+      <div class="running-wrap" id="runningList"></div>
       <div class="today-foot">今日合计 <b id="todayFoot">0m</b></div>
     </div>
   </div>
@@ -251,7 +255,7 @@
     try { localStorage.setItem(KEY, JSON.stringify(sessions)); }
     catch(e){ alert("保存失败:浏览器可能处于隐私模式或存储已满。请用「导出 JSON」备份。"); }
   }
-  const active = () => sessions.find(s => !s.end);
+  const actives = () => sessions.filter(s => !s.end).sort((a,b) => a.start - b.start);
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
   // ---------- 格式化 ----------
@@ -291,22 +295,29 @@
   $("startBtn").onclick = () => {
     const task = $("taskInput").value.trim();
     if(!task){ $("taskInput").focus(); return; }
-    if(active()) return;
     sessions.push({ id: uid(), task, start: Date.now(), end: null, deliverable: "" });
     $("taskInput").value = "";
     save(); render(); tick();
+    $("taskInput").focus();
   };
   $("taskInput").addEventListener("keydown", e => { if(e.key === "Enter") $("startBtn").click(); });
 
-  $("stopBtn").onclick = () => {
-    const a = active();
+  function requestStop(id){
+    const a = sessions.find(s => s.id === id && !s.end);
     if(!a) return;
     pendingStop = { id: a.id, end: Date.now() };
     $("modalSub").textContent = a.task + " · 用时 " + fmtDur((pendingStop.end - a.start)/1000);
     $("deliverableInput").value = a.deliverable || "";
     $("overlay").hidden = false;
     $("deliverableInput").focus();
-  };
+  }
+  // 进行中列表:每个计时各自「结束」/「调整开始时间」
+  $("runningList").addEventListener("click", e => {
+    const stop = e.target.getAttribute("data-stop");
+    const ea   = e.target.getAttribute("data-editactive");
+    if(stop) requestStop(stop);
+    if(ea) openEdit(ea);
+  });
   function finalize(deliverable){
     if(!pendingStop) return;
     const s = sessions.find(x => x.id === pendingStop.id);
@@ -353,7 +364,6 @@
   function closeEdit(){ editing = null; $("editOverlay").hidden = true; }
 
   $("addBtn").onclick = () => openEdit(null);
-  $("editActiveBtn").onclick = () => { const a = active(); if(a) openEdit(a.id); };
   $("editCancel").onclick = closeEdit;
   $("editRunning").onclick = () => { $("editEnd").value = ""; };
   $("editDelete").onclick = () => {
@@ -366,10 +376,6 @@
     if(!task){ alert("请填任务名。"); $("editTask").focus(); return; }
     if(start === null){ alert("请填开始时间。"); return; }
     if(end !== null && end <= start){ alert("结束时间要晚于开始时间。"); return; }
-    if(end === null){
-      const other = sessions.find(x => !x.end && x.id !== editing);
-      if(other){ alert("已有一个进行中的计时:" + other.task + "。请先结束它,或给这条填上结束时间。"); return; }
-    }
     if(editing){
       const s = sessions.find(x => x.id === editing);
       if(s){ s.task = task; s.start = start; s.end = end; s.deliverable = $("editDeli").value.trim(); }
@@ -424,11 +430,22 @@
     const names = [...new Set(sessions.map(s => s.task))].slice(-30).reverse();
     $("taskList").innerHTML = names.map(n => '<option value="'+esc(n)+'">').join("");
   }
-  function renderTimer(){
-    const a = active();
-    $("idleView").hidden = !!a;
-    $("runView").hidden  = !a;
-    if(a) $("runTask").textContent = a.task;
+  function renderRunning(){
+    const list = actives();
+    $("runningList").innerHTML = list.map(a => {
+      const d = new Date(a.start);
+      const day = dateKey(a.start) === today() ? "" : (d.getMonth()+1)+"/"+d.getDate()+" ";
+      return "<div class='run-item'>"+
+        "<div class='run-item-top'>"+
+          "<div class='r-head'><span class='r-task'>"+esc(a.task)+"</span>"+
+          "<span class='r-meta'>"+day+fmtHM(a.start)+" 开始</span></div>"+
+          "<span class='run-clock' id='clk-"+a.id+"'>00:00:00</span></div>"+
+        "<div class='run-item-actions'>"+
+          "<button class='btn stop' data-stop='"+a.id+"'>■ 结束</button>"+
+          "<button class='linklike' data-editactive='"+a.id+"'>调整开始时间</button>"+
+        "</div>"+
+      "</div>";
+    }).join("");
     const sod = startOfDay(Date.now());
     $("todayFoot").textContent = fmtDur(sessions.filter(s => s.end && s.start >= sod).reduce((n,s) => n+secOf(s), 0));
   }
@@ -503,16 +520,21 @@
     document.querySelectorAll(".seg").forEach(b => b.classList.toggle("on", b.getAttribute("data-period") === period));
   }
   function render(){
-    renderSegmented(); renderTimer(); renderKPIs();
+    renderSegmented(); renderRunning(); renderKPIs();
     renderTaskChart(); renderDailyChart(); renderTable(); renderDatalist();
   }
 
   function tick(){
-    const a = active();
-    if(a){
-      const sec = (Date.now() - a.start)/1000;
-      $("clock").textContent = fmtClock(sec);
-      document.title = "⏱ " + fmtClock(sec) + " · " + a.task;
+    const list = actives();
+    list.forEach(a => {
+      const el = $("clk-" + a.id);
+      if(el) el.textContent = fmtClock((Date.now() - a.start)/1000);
+    });
+    if(list.length === 1){
+      const a = list[0];
+      document.title = "⏱ " + fmtClock((Date.now() - a.start)/1000) + " · " + a.task;
+    } else if(list.length > 1){
+      document.title = "⏱ " + list.length + " 个进行中";
     } else {
       document.title = "工作计时";
     }
