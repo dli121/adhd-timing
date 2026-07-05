@@ -12,7 +12,7 @@
 
 ### 方式一 · 下载现成的 App(最省事)
 
-到 **[Releases](https://github.com/dli121/work-timing/releases)** 页面下载最新的 `work-timing-macOS-arm64.zip`,解压得到「工作计时.app」,拖进「应用程序」即可双击使用。
+到 **[Releases](https://github.com/dli121/adhd-timing/releases)** 页面下载最新的 `adhd-timing-macOS-arm64.zip`,解压得到「工作计时.app」,拖进「应用程序」即可双击使用。
 
 > - 未做代码签名。首次打开若提示「无法验证开发者」:**右键点 App → 打开 → 再次点打开**,确认一次即可。
 > - 该二进制仅适用于 **Apple Silicon(arm64)** 的 Mac。Intel Mac 或其它系统请用方式二自行构建。
@@ -20,8 +20,8 @@
 ### 方式二 · 克隆后自己跑
 
 ```bash
-git clone https://github.com/dli121/work-timing.git
-cd work-timing
+git clone https://github.com/dli121/adhd-timing.git
+cd adhd-timing
 ```
 
 然后二选一:
